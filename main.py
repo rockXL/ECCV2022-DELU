@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 import model
 import options
+import options
 import wsad_dataset
 from test import test
 from train import train

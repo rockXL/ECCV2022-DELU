@@ -51,6 +51,7 @@ class DELU(torch.nn.Module):
         super().__init__()
         embed_dim = 2048
         dropout_ratio = args['opt'].dropout_ratio
+        self.batchsize = args['opt'].batch_size
 
         self.vAttn = getattr(model, args['opt'].AWM)(1024, args)
         self.fAttn = getattr(model, args['opt'].AWM)(1024, args)
@@ -159,13 +160,13 @@ class DELU(torch.nn.Module):
                         element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         total_loss = (
-                    args['opt'].alpha_edl * edl_loss +
-                    args['opt'].alpha_uct_guide * uct_guide_loss +
-                    loss_mil_orig.mean() + loss_mil_supp.mean() +
-                    args['opt'].alpha3 * loss_3_supp_Contrastive +
-                    args['opt'].alpha4 * mutual_loss +
-                    args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3 +
-                    args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3)
+            args['opt'].alpha_edl * edl_loss +
+            args['opt'].alpha_uct_guide * uct_guide_loss +
+            loss_mil_orig.mean() + loss_mil_supp.mean() +
+            args['opt'].alpha3 * loss_3_supp_Contrastive +
+            args['opt'].alpha4 * mutual_loss +
+            args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3 +
+            args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3)
 
         loss_dict = {
             'edl_loss': args['opt'].alpha_edl * edl_loss,
@@ -286,7 +287,7 @@ class DELU(torch.nn.Module):
         instance_logits = torch.mean(topk_val, dim=-2)
 
         labels_with_back = labels_with_back / (
-                torch.sum(labels_with_back, dim=1, keepdim=True) + 1e-4)
+            torch.sum(labels_with_back, dim=1, keepdim=True) + 1e-4)
 
         milloss = - (labels_with_back * F.log_softmax(instance_logits, dim=-1)).sum(dim=-1)
 
@@ -314,7 +315,7 @@ class DELU(torch.nn.Module):
             Lf2 = torch.mm(torch.transpose(x[i + 1], 1, 0), (1 - atn2) / n2)
 
             d1 = 1 - torch.sum(Hf1 * Hf2, dim=0) / (
-                    torch.norm(Hf1, 2, dim=0) * torch.norm(Hf2, 2, dim=0))  # 1-similarity
+                torch.norm(Hf1, 2, dim=0) * torch.norm(Hf2, 2, dim=0))  # 1-similarity
             d2 = 1 - torch.sum(Hf1 * Lf2, dim=0) / (torch.norm(Hf1, 2, dim=0) * torch.norm(Lf2, 2, dim=0))
             d3 = 1 - torch.sum(Hf2 * Lf1, dim=0) / (torch.norm(Hf2, 2, dim=0) * torch.norm(Lf1, 2, dim=0))
             sim_loss = sim_loss + 0.5 * torch.sum(
@@ -448,13 +449,13 @@ class DELU_ACT(torch.nn.Module):
 
         # total loss
         total_loss = (
-                    args['opt'].alpha_edl * edl_loss +
-                    args['opt'].alpha_uct_guide * uct_guide_loss +
-                    loss_mil_orig.mean() + loss_mil_supp.mean() +
-                    args['opt'].alpha3 * loss_3_supp_Contrastive +
-                    args['opt'].alpha4 * mutual_loss +
-                    args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3 +
-                    args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3)
+            args['opt'].alpha_edl * edl_loss +
+            args['opt'].alpha_uct_guide * uct_guide_loss +
+            loss_mil_orig.mean() + loss_mil_supp.mean() +
+            args['opt'].alpha3 * loss_3_supp_Contrastive +
+            args['opt'].alpha4 * mutual_loss +
+            args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3 +
+            args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3)
 
         loss_dict = {
             'edl_loss': args['opt'].alpha_edl * edl_loss,
@@ -498,7 +499,7 @@ class DELU_ACT(torch.nn.Module):
         total_loss_guide = (loss_guide + v_loss_guide + f_loss_guide) / 3
 
         _, uct_indices = torch.sort(snippet_uct, dim=1)
-        sorted_curve = torch.gather(curve.repeat(10, 1), 1, uct_indices)
+        sorted_curve = torch.gather(curve.repeat(self.batchsize, 1), 1, uct_indices)
 
         uct_guide_loss = torch.mul(sorted_curve, total_loss_guide).mean()
 
@@ -587,7 +588,7 @@ class DELU_ACT(torch.nn.Module):
             dim=-2,
         )
         labels_with_back = labels_with_back / (
-                torch.sum(labels_with_back, dim=1, keepdim=True) + 1e-4)
+            torch.sum(labels_with_back, dim=1, keepdim=True) + 1e-4)
         milloss = (-(labels_with_back *
                      F.log_softmax(instance_logits, dim=-1)).sum(dim=-1))
         if reduce is not None:
@@ -616,7 +617,7 @@ class DELU_ACT(torch.nn.Module):
             Lf2 = torch.mm(torch.transpose(x[i + 1], 1, 0), (1 - atn2) / n2)
 
             d1 = 1 - torch.sum(Hf1 * Hf2, dim=0) / (
-                    torch.norm(Hf1, 2, dim=0) * torch.norm(Hf2, 2, dim=0))  # 1-similarity
+                torch.norm(Hf1, 2, dim=0) * torch.norm(Hf2, 2, dim=0))  # 1-similarity
             d2 = 1 - torch.sum(Hf1 * Lf2, dim=0) / (torch.norm(Hf1, 2, dim=0) * torch.norm(Lf2, 2, dim=0))
             d3 = 1 - torch.sum(Hf2 * Lf1, dim=0) / (torch.norm(Hf2, 2, dim=0) * torch.norm(Lf1, 2, dim=0))
             sim_loss = sim_loss + 0.5 * torch.sum(

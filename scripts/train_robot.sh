@@ -19,7 +19,7 @@ python main.py \
 --dataset_name Thumos14reduced \
 --path_dataset /dev/THUMOS14/Thumos14reduced \
 --save_model_path $current_path \
---model_name default_$num_similar_$batch_size \
+--model_name default_${num_similar}_${batch_size} \
 --num_class 20 \
 --use_model DELU \
 --max_iter 5000 \
