@@ -13,7 +13,7 @@ python main.py \
 --lr 0.00005 \
 --k 7 \
 --dataset_name Thumos14reduced \
---path_dataset /path/to/CO2-THUMOS-14 \
+--path_dataset /dev/THUMOS14/Thumos14reduced \
 --num_class 20 \
 --use_model DELU \
 --max_iter 5000 \
