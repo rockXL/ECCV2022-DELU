@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-cd ..
+current_path=`pwd`
 
 python main.py \
 --model_name DELU \
@@ -12,8 +12,12 @@ python main.py \
 --max_seqlen 320 \
 --lr 0.00005 \
 --k 7 \
+--num_similar 3 \
+--batch_size 10 \
 --dataset_name Thumos14reduced \
 --path_dataset /dev/THUMOS14/Thumos14reduced \
+--save_model_path $current_path \
+--model_name default \
 --num_class 20 \
 --use_model DELU \
 --max_iter 5000 \

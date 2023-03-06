@@ -1,4 +1,5 @@
 from __future__ import print_function
+import torch.optim as optim
 
 import os
 import random
@@ -29,8 +30,6 @@ def setup_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
-import torch.optim as optim
-
 if __name__ == '__main__':
     args = options.parser.parse_args()
 
@@ -50,10 +49,12 @@ if __name__ == '__main__':
         max_map = [0] * 9
     else:
         max_map = [0] * 10
-    log_model_path = os.path.join(args.path_dataset, 'logs', args.model_name)
-    ckpt_path = os.path.join(args.path_dataset, 'ckpt')
-    if not os.path.exists(ckpt_path):
-        os.makedirs(ckpt_path)
+    log_model_path = os.path.join(
+        args.save_model_path, 'logs', args.model_name)
+    ckpt_path = os.path.join(
+        args.save_model_path, 'model', args.model_name)
+    os.makedirs(log_model_path, exist_ok=True)
+    os.makedirs(ckpt_path, exist_ok=True)
     print(args)
     model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
 
