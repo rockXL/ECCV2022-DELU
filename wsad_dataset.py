@@ -103,14 +103,94 @@ class SampleDataset:
             # Load rest pairs
             if self.batch_size - similar_size * n_similar < 0:
                 self.batch_size = similar_size * n_similar
-
+            rest_size = self.batch_size - similar_size * n_similar
             rand_sampleid = np.random.choice(
                 len(self.trainidx),
-                size=self.batch_size - similar_size * n_similar,
+                size=rest_size,
             )
-
             for r in rand_sampleid:
                 idx.append(self.trainidx[r])
+
+            feat = []
+            for i in idx:
+                ifeat = self.features[i]
+                if self.sampling == 'random':
+                    sample_idx = self.random_perturb(ifeat.shape[0])
+                elif self.sampling == 'uniform':
+                    sample_idx = self.uniform_sampling(ifeat.shape[0])
+                elif self.sampling == "all":
+                    sample_idx = np.arange(ifeat.shape[0])
+                else:
+                    raise AssertionError('Not supported sampling !')
+                ifeat = ifeat[sample_idx]
+                feat.append(ifeat)
+            feat = np.array(feat)
+            labels = np.array([self.labels_multihot[i] for i in idx])
+            if self.mode == "rgb":
+                feat = feat[..., : self.feature_size]
+            elif self.mode == "flow":
+                feat = feat[..., self.feature_size:]
+            return feat, labels, rand_sampleid
+            # return feat, labels, rand_sampleid, idx
+
+        else:
+            labs = self.labels_multihot[self.testidx[self.currenttestidx]]
+            feat = self.features[self.testidx[self.currenttestidx]]
+            # feat = utils.process_feat(feat, normalize=self.normalize)
+            # feature = feature[sample_idx]
+            vn = self.videonames[self.testidx[self.currenttestidx]]
+            if self.currenttestidx == len(self.testidx) - 1:
+                done = True
+                self.currenttestidx = 0
+            else:
+                done = False
+                self.currenttestidx += 1
+            feat = np.array(feat)
+            if self.mode == "rgb":
+                feat = feat[..., : self.feature_size]
+            elif self.mode == "flow":
+                feat = feat[..., self.feature_size:]
+            return feat, np.array(labs), vn, done
+
+    def load_aug_data(self, args=None, is_training=True):
+        '''
+        data augent, include:
+        1: change the speed;(the top k loss should be changed accordingly)
+        2: cut and concat different videos with the same label;
+        '''
+        n_similar = args.num_similar
+        similar_size = 2
+
+        if is_training:
+            labels = []
+            idx = []
+
+            # Load similar pairs
+            if n_similar != 0:
+                rand_classid = np.random.choice(
+                    len(self.classwiseidx), size=n_similar
+                )
+                for rid in rand_classid:
+                    rand_sampleid = np.random.choice(
+                        len(self.classwiseidx[rid]),
+                        size=similar_size,
+                        replace=False,
+                    )
+
+                    for k in rand_sampleid:
+                        idx.append(self.classwiseidx[rid][k])
+
+            # Load rest pairs
+            if self.batch_size - similar_size * n_similar < 0:
+                self.batch_size = similar_size * n_similar
+            rest_size = self.batch_size - similar_size * n_similar
+            rand_sampleid = np.random.choice(
+                len(self.trainidx),
+                size=rest_size,
+            )
+            for r in rand_sampleid:
+                idx.append(self.trainidx[r])
+
             feat = []
             for i in idx:
                 ifeat = self.features[i]

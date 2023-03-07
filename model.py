@@ -210,7 +210,7 @@ class DELU(torch.nn.Module):
         total_loss_guide = (loss_guide + v_loss_guide + f_loss_guide) / 3
 
         _, uct_indices = torch.sort(snippet_uct, dim=1)
-        sorted_curve = torch.gather(curve.repeat(10, 1), 1, uct_indices)
+        sorted_curve = torch.gather(curve.repeat(self.batchsize, 1), 1, uct_indices)
 
         uct_guide_loss = torch.mul(sorted_curve, total_loss_guide).mean()
 
