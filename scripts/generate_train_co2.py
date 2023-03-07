@@ -14,13 +14,13 @@ with open('train_cmd.txt', 'w') as fout:
                 num_similar = int(bs * nsr)
                 gpu_id = i % 8
                 # generate train cmd
-                cmd = 'CUDA_VISIBLE_DEVICES={} sh scripts/train_robot.sh {} {}'\
+                cmd = 'CUDA_VISIBLE_DEVICES={} sh scripts/train_robot_co2.sh {} {}'\
                     .format(gpu_id, num_similar, bs)
                 fout.write('{}\n'.format(cmd))
                 train_cmds.append(cmd)
                 # generate test cmd
                 cmd = 'CUDA_VISIBLE_DEVICES={} sh scripts/test_model.sh {}'\
-                    .format(gpu_id, "default_"+str(num_similar)+"_"+str(bs))
+                    .format(gpu_id, "co2_"+str(num_similar)+"_"+str(bs))
                 test_cmds.append(cmd)
                 f1out.write('{}\n'.format(cmd))
 
@@ -58,6 +58,6 @@ if __name__ == '__main__':
     s_results = sorted(results, key=lambda x: x[1], reverse=True)
     for i in s_results[:3]:
         print(i)
-    with open('default_out.txt', 'w') as fout:
+    with open('co2_out.txt', 'w') as fout:
         for i in s_results:
             fout.write('{}\n'.format(i))
