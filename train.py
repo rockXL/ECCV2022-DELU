@@ -7,7 +7,8 @@ torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 def train(itr, dataset, args, model, optimizer, device):
     model.train()
-    features, labels, pairs_id = dataset.load_data(n_similar=args.num_similar)
+    # features, labels, pairs_id = dataset.load_data(n_similar=args.num_similar)
+    features, labels, pairs_id = dataset.load_aug_data(args)
     seq_len = np.sum(np.max(np.abs(features), axis=2) > 0, axis=1)
     features = features[:, :np.max(seq_len), :]
 
