@@ -4,6 +4,7 @@ import utils.wsad_utils as utils
 import random
 import os
 import options
+from collections import Counter
 
 
 class SampleDataset:
@@ -90,3 +91,24 @@ if __name__ == '__main__':
     print('total video number:{}'.format(data.features.shape))
     print('train video number:{}'.format(len(data.trainidx)))
     print('test video number:{}'.format(len(data.testidx)))
+    seq_lengths = [i.shape[0] for i in data.features]
+    seq_lengths = sorted(seq_lengths)
+    min_ = seq_lengths[0]
+    max_ = seq_lengths[-1]
+    media_ = seq_lengths[int(len(seq_lengths)/2)]
+    print('min length:{}'.format(min_))
+    print('max_ length:{}'.format(max_))
+    print('media_ length:{}'.format(media_))
+    temp = [i for i in seq_lengths if i < 320]
+    print('length less than 320 ratio:{}'.format(len(temp)/len(seq_lengths)))
+    temp = [i for i in seq_lengths if i < 500]
+    print('length less than 500 ratio:{}'.format(len(temp)/len(seq_lengths)))
+
+    cnt = 0
+    for idx, v in enumerate(data.classwiseidx):
+        print('training set: class {} has {} videos'.format(idx, len(v)))
+        cnt += len(v)
+    cls_cnt = [sum(i) for i in data.labels_multihot]
+    count = Counter(cls_cnt)
+    for k, v in count.items():
+        print('{} video has {} label'.format(v, int(k)))
