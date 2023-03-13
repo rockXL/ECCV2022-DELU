@@ -117,3 +117,12 @@ if __name__ == '__main__':
         temp_labels_multihot = data.labels_multihot[i]
         print(temp_features.shape)      
         print(temp_labels_multihot.shape)      
+    
+    time_dim, fea_dim = temp_features.shape
+    speed = 2
+    new_time_dim = int(time_dim / speed)
+    if new_time_dim < time_dim:
+        samples = np.arange(new_time_dim) * time_dim / new_time_dim
+        samples = np.array(samples, dtype=int)
+        print(samples)
+        print(temp_features[samples].shape)  

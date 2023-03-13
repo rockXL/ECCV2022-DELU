@@ -12,7 +12,7 @@ python main.py \
 --lr 0.00005 \
 --k 7 \
 --num_similar 3 \
---batch_size 10 \
+--batch_size 13 \
 --do_video_concat_aug True \
 --dataset_name Thumos14reduced \
 --path_dataset /dev/THUMOS14/Thumos14reduced \

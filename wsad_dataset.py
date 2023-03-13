@@ -169,7 +169,7 @@ class SampleDataset:
                 # label merge
                 merged_label = sum(label)
                 merged_label[np.where(merged_label>0)]=1
-                
+
                 merged_features.append(merged_feature)
                 merged_labels.append(merged_label)
                 feat = []
@@ -178,7 +178,24 @@ class SampleDataset:
         assert len(merged_features) == len(merged_labels)
         return np.array(merged_features), np.array(merged_labels)
         
-    def load_aug_data(self, args=None, is_training=True):
+    def speed_transfer(self, vid_feature, speed):   
+        time_dim, fea_dim = vid_feature.shape
+        new_time_dim = int(time_dim / speed)
+        if new_time_dim < time_dim:
+            # speed>1, video plays faster = sample less features
+            samples = np.arange(new_time_dim) * time_dim / new_time_dim
+            samples = np.array(samples, dtype=int)
+            return vid_feature[samples]
+        else:
+            # speed<1, video plays slower =repeat features
+            repeat_times = int(new_time_dim / time_dim)
+            new_vid_feature = []
+            for feat in vid_feature:
+                for i in range(repeat_times):
+                    new_vid_feature.append(feat)
+            return np.array(new_vid_feature)
+            
+    def load_aug_data(self, args=None, speed=1.0, is_training=True):
         '''
         data augent, include:
         1: change the speed;(the top k loss should be changed accordingly)
@@ -208,10 +225,9 @@ class SampleDataset:
             self.temp_features = np.copy(self.features)
             self.temp_labels_multihot = np.copy(self.labels_multihot)              
             # add data augmentation code here
-            Aug_flag = self.args.do_video_concat_aug
-            if Aug_flag:
+            if self.args.do_video_concat_aug:
                 augment_size = n_similar
-                same_cls_idx = idx[:]
+                same_cls_idx = idx
                 aug_features, aug_labels_multihot = \
                     self.video_feature_augment(same_cls_idx, similar_size)
                 
@@ -236,6 +252,10 @@ class SampleDataset:
             feat = []
             for i in idx:
                 ifeat = self.temp_features[i]
+                # change speed
+                if speed!=1 and ifeat.shape[0] > 20:
+                    ifeat = self.speed_transfer(ifeat, speed)                
+                
                 if self.sampling == 'random':
                     sample_idx = self.random_perturb(ifeat.shape[0])
                 elif self.sampling == 'uniform':
