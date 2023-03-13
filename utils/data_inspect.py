@@ -112,3 +112,8 @@ if __name__ == '__main__':
     count = Counter(cls_cnt)
     for k, v in count.items():
         print('{} video has {} label'.format(v, int(k)))
+    for i in range(3):
+        temp_features = data.features[i]
+        temp_labels_multihot = data.labels_multihot[i]
+        print(temp_features.shape)      
+        print(temp_labels_multihot.shape)      

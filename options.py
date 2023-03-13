@@ -39,6 +39,7 @@ parser.add_argument('--similar_size', type=int, default=2)
 
 parser.add_argument('--weight_decay', type=float, default=5e-4)
 parser.add_argument('--dataset', type=str, default='SampleDataset')
+parser.add_argument('--do_video_concat_aug', type=bool, default=False)
 parser.add_argument('--proposal_method', type=str,
                     default='multiple_threshold_hamnet')
 

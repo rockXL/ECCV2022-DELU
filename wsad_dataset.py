@@ -8,6 +8,7 @@ import options
 
 class SampleDataset:
     def __init__(self, args, mode="both", sampling='random'):
+        self.args = args
         self.dataset_name = args.dataset_name
         self.num_class = args.num_class
         self.sampling = sampling
@@ -152,6 +153,31 @@ class SampleDataset:
                 feat = feat[..., self.feature_size:]
             return feat, np.array(labs), vn, done
 
+    def video_feature_augment(self, same_cls_idx, similar_size):   
+        feat = []
+        label = []
+        cnt = 0
+        merged_features = []
+        merged_labels = []
+        for i in same_cls_idx:
+            cnt+=1
+            feat.append(self.features[i])
+            label.append(self.labels_multihot[i])
+            if cnt % similar_size == 0:
+                # feature concat
+                merged_feature = np.vstack(feat)
+                # label merge
+                merged_label = sum(label)
+                merged_label[np.where(merged_label>0)]=1
+                
+                merged_features.append(merged_feature)
+                merged_labels.append(merged_label)
+                feat = []
+                label = []
+                cnt = 0                
+        assert len(merged_features) == len(merged_labels)
+        return np.array(merged_features), np.array(merged_labels)
+        
     def load_aug_data(self, args=None, is_training=True):
         '''
         data augent, include:
@@ -160,11 +186,10 @@ class SampleDataset:
         '''
         n_similar = args.num_similar
         similar_size = 2
-
         if is_training:
             labels = []
             idx = []
-
+            same_cls_idx = []
             # Load similar pairs
             if n_similar != 0:
                 rand_classid = np.random.choice(
@@ -179,11 +204,28 @@ class SampleDataset:
 
                     for k in rand_sampleid:
                         idx.append(self.classwiseidx[rid][k])
-
+            augment_size = 0
+            self.temp_features = np.copy(self.features)
+            self.temp_labels_multihot = np.copy(self.labels_multihot)              
+            # add data augmentation code here
+            Aug_flag = self.args.do_video_concat_aug
+            if Aug_flag:
+                augment_size = n_similar
+                same_cls_idx = idx[:]
+                aug_features, aug_labels_multihot = \
+                    self.video_feature_augment(same_cls_idx, similar_size)
+                
+                self.temp_features = np.append(self.temp_features, aug_features, axis=0)
+                self.temp_labels_multihot = np.append(self.temp_labels_multihot, aug_labels_multihot, axis=0)
+                aug_idx = list(range(-len(aug_features), 0))
+                idx.extend(aug_idx)
+                # print("aug_idx:{}".format(aug_idx))
+                # print("aug_labels_multihot:{}".format(aug_labels_multihot))
+            
             # Load rest pairs
             if self.batch_size - similar_size * n_similar < 0:
                 self.batch_size = similar_size * n_similar
-            rest_size = self.batch_size - similar_size * n_similar
+            rest_size = self.batch_size - similar_size * n_similar - augment_size
             rand_sampleid = np.random.choice(
                 len(self.trainidx),
                 size=rest_size,
@@ -193,7 +235,7 @@ class SampleDataset:
 
             feat = []
             for i in idx:
-                ifeat = self.features[i]
+                ifeat = self.temp_features[i]
                 if self.sampling == 'random':
                     sample_idx = self.random_perturb(ifeat.shape[0])
                 elif self.sampling == 'uniform':
@@ -205,7 +247,7 @@ class SampleDataset:
                 ifeat = ifeat[sample_idx]
                 feat.append(ifeat)
             feat = np.array(feat)
-            labels = np.array([self.labels_multihot[i] for i in idx])
+            labels = np.array([self.temp_labels_multihot[i] for i in idx])
             if self.mode == "rgb":
                 feat = feat[..., : self.feature_size]
             elif self.mode == "flow":
