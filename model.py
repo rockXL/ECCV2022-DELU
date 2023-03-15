@@ -104,7 +104,23 @@ class DELU(torch.nn.Module):
         return atn * (x - _min) + _min
 
     def criterion(self, outputs, labels, **args):
-        feat, element_logits, element_atn = outputs['feat'], outputs['cas'], outputs['attn']
+        if args['opt'].use_multi_speed_feature:
+            assert type(outputs) == list
+            outputs, slow_outputs, fast_outputs = outputs
+            slow_feat, slow_element_logits, slow_element_atn = \
+                slow_outputs['feat'], slow_outputs['cas'], slow_outputs['attn']
+            fast_feat, fast_element_logits, fast_element_atn = \
+                fast_outputs['feat'], fast_outputs['cas'], fast_outputs['attn']                
+            feat, element_logits, element_atn = outputs['feat'], outputs['cas'], outputs['attn']
+            # print("element_logits:{}".format(element_logits.shape))
+            # print("fast_element_logits:{}".format(fast_element_logits.shape))
+            # print("slow_element_logits:{}".format(slow_element_logits.shape))
+            # exit()
+            element_logits = (element_logits + slow_element_logits + fast_element_logits)/3
+            element_atn = (element_atn + slow_element_atn + fast_element_atn)/3
+        else:
+            assert type(outputs) == dict
+            feat, element_logits, element_atn = outputs['feat'], outputs['cas'], outputs['attn']
         v_atn = outputs['v_atn']
         f_atn = outputs['f_atn']
         mutual_loss = 0.5 * F.mse_loss(v_atn, f_atn.detach()) + 0.5 * F.mse_loss(f_atn, v_atn.detach())

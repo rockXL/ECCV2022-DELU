@@ -14,6 +14,7 @@ python main.py \
 --num_similar 3 \
 --batch_size 13 \
 --do_video_concat_aug True \
+--use_multi_speed_feature True \
 --dataset_name Thumos14reduced \
 --path_dataset /dev/THUMOS14/Thumos14reduced \
 --save_model_path $current_path \

@@ -153,7 +153,7 @@ class SampleDataset:
                 feat = feat[..., self.feature_size:]
             return feat, np.array(labs), vn, done
 
-    def video_feature_augment(self, same_cls_idx, similar_size):   
+    def video_feature_concat(self, same_cls_idx, similar_size):   
         feat = []
         label = []
         cnt = 0
@@ -161,8 +161,8 @@ class SampleDataset:
         merged_labels = []
         for i in same_cls_idx:
             cnt+=1
-            feat.append(self.features[i])
-            label.append(self.labels_multihot[i])
+            feat.append(self.temp_features[i])
+            label.append(self.temp_labels_multihot[i])
             if cnt % similar_size == 0:
                 # feature concat
                 merged_feature = np.vstack(feat)
@@ -176,8 +176,9 @@ class SampleDataset:
                 label = []
                 cnt = 0                
         assert len(merged_features) == len(merged_labels)
+        assert merged_feature.shape[1] == self.temp_features[i].shape[1]
         return np.array(merged_features), np.array(merged_labels)
-        
+
     def speed_transfer(self, vid_feature, speed):   
         time_dim, fea_dim = vid_feature.shape
         new_time_dim = int(time_dim / speed)
@@ -190,17 +191,18 @@ class SampleDataset:
             # speed<1, video plays slower =repeat features
             repeat_times = int(new_time_dim / time_dim)
             new_vid_feature = []
-            for feat in vid_feature:
+            for feat_i in vid_feature:
                 for i in range(repeat_times):
-                    new_vid_feature.append(feat)
+                    new_vid_feature.append(feat_i)
             return np.array(new_vid_feature)
-            
+
     def load_aug_data(self, args=None, speed=1.0, is_training=True):
         '''
         data augent, include:
         1: change the speed;(the top k loss should be changed accordingly)
         2: cut and concat different videos with the same label;
-        '''
+        '''  
+        
         n_similar = args.num_similar
         similar_size = 2
         if is_training:
@@ -229,14 +231,13 @@ class SampleDataset:
                 augment_size = n_similar
                 same_cls_idx = idx
                 aug_features, aug_labels_multihot = \
-                    self.video_feature_augment(same_cls_idx, similar_size)
-                
+                    self.video_feature_concat(same_cls_idx, similar_size)
+                # print("aug_features.shape:{}".format(aug_features.shape))
+                # print("self.temp_features.shape:{}".format(self.temp_features.shape))
                 self.temp_features = np.append(self.temp_features, aug_features, axis=0)
                 self.temp_labels_multihot = np.append(self.temp_labels_multihot, aug_labels_multihot, axis=0)
                 aug_idx = list(range(-len(aug_features), 0))
                 idx.extend(aug_idx)
-                # print("aug_idx:{}".format(aug_idx))
-                # print("aug_labels_multihot:{}".format(aug_labels_multihot))
             
             # Load rest pairs
             if self.batch_size - similar_size * n_similar < 0:
@@ -248,33 +249,19 @@ class SampleDataset:
             )
             for r in rand_sampleid:
                 idx.append(self.trainidx[r])
-
-            feat = []
-            for i in idx:
-                ifeat = self.temp_features[i]
-                # change speed
-                if speed!=1 and ifeat.shape[0] > 20:
-                    ifeat = self.speed_transfer(ifeat, speed)                
-                
-                if self.sampling == 'random':
-                    sample_idx = self.random_perturb(ifeat.shape[0])
-                elif self.sampling == 'uniform':
-                    sample_idx = self.uniform_sampling(ifeat.shape[0])
-                elif self.sampling == "all":
-                    sample_idx = np.arange(ifeat.shape[0])
-                else:
-                    raise AssertionError('Not supported sampling !')
-                ifeat = ifeat[sample_idx]
-                feat.append(ifeat)
-            feat = np.array(feat)
+            
             labels = np.array([self.temp_labels_multihot[i] for i in idx])
-            if self.mode == "rgb":
-                feat = feat[..., : self.feature_size]
-            elif self.mode == "flow":
-                feat = feat[..., self.feature_size:]
+            if type(speed)==list:
+                speed_slow, speed1, speed_fast = speed
+                feat_slow = self.sample_feature_with_speed(idx, speed_slow)
+                feat = self.sample_feature_with_speed(idx, speed1)
+                feat_fast = self.sample_feature_with_speed(idx, speed_fast)
+                feat = [feat_slow, feat, feat_fast]
+            else:
+                feat = self.sample_feature_with_speed(idx, speed)
+            
             return feat, labels, rand_sampleid
             # return feat, labels, rand_sampleid, idx
-
         else:
             labs = self.labels_multihot[self.testidx[self.currenttestidx]]
             feat = self.features[self.testidx[self.currenttestidx]]
@@ -293,6 +280,31 @@ class SampleDataset:
             elif self.mode == "flow":
                 feat = feat[..., self.feature_size:]
             return feat, np.array(labs), vn, done
+    
+    def sample_feature_with_speed(self, idx, speed):
+        feat = []
+        for i in idx:
+            ifeat = self.temp_features[i]
+            # method1: change speed here
+            if speed!=1 and ifeat.shape[0] > 10:
+                ifeat = self.speed_transfer(ifeat, speed)
+            if self.sampling == 'random':
+                sample_idx = self.random_perturb(ifeat.shape[0])
+            elif self.sampling == 'uniform':
+                sample_idx = self.uniform_sampling(ifeat.shape[0])
+            elif self.sampling == "all":
+                sample_idx = np.arange(ifeat.shape[0])
+            else:
+                raise AssertionError('Not supported sampling !')
+            # method2: change speed here 
+            ifeat = ifeat[sample_idx]
+            feat.append(ifeat)
+        feat = np.array(feat)
+        if self.mode == "rgb":
+            feat = feat[..., : self.feature_size]
+        elif self.mode == "flow":
+            feat = feat[..., self.feature_size:]
+        return feat      
 
     def random_avg(self, x, segm=None):
         if len(x) < self.num_segments:
