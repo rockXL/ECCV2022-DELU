@@ -249,9 +249,9 @@ class SampleDataset:
             )
             for r in rand_sampleid:
                 idx.append(self.trainidx[r])
-            
+
             labels = np.array([self.temp_labels_multihot[i] for i in idx])
-            if type(speed)==list:
+            if type(speed) == list:
                 speed_slow, speed1, speed_fast = speed
                 feat_slow = self.sample_feature_with_speed(idx, speed_slow)
                 feat = self.sample_feature_with_speed(idx, speed1)
@@ -259,7 +259,7 @@ class SampleDataset:
                 feat = [feat_slow, feat, feat_fast]
             else:
                 feat = self.sample_feature_with_speed(idx, speed)
-            
+
             return feat, labels, rand_sampleid
             # return feat, labels, rand_sampleid, idx
         else:
@@ -280,7 +280,7 @@ class SampleDataset:
             elif self.mode == "flow":
                 feat = feat[..., self.feature_size:]
             return feat, np.array(labs), vn, done
-    
+
     def sample_feature_with_speed(self, idx, speed):
         feat = []
         for i in idx:
