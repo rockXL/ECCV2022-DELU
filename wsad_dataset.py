@@ -286,17 +286,16 @@ class SampleDataset:
         for i in idx:
             ifeat = self.temp_features[i]
             # method1: change speed here
-            if speed!=1 and ifeat.shape[0] > 10:
-                ifeat = self.speed_transfer(ifeat, speed)
+            # if speed!=1 and ifeat.shape[0] > 10:
+            #     ifeat = self.speed_transfer(ifeat, speed)
             if self.sampling == 'random':
-                sample_idx = self.random_perturb(ifeat.shape[0])
+                sample_idx = self.random_perturb(ifeat.shape[0], sample_num = int(self.num_segments/speed))
             elif self.sampling == 'uniform':
-                sample_idx = self.uniform_sampling(ifeat.shape[0])
+                sample_idx = self.uniform_sampling(ifeat.shape[0], sample_num = int(self.num_segments/speed))
             elif self.sampling == "all":
                 sample_idx = np.arange(ifeat.shape[0])
             else:
                 raise AssertionError('Not supported sampling !')
-            # method2: change speed here 
             ifeat = ifeat[sample_idx]
             feat.append(ifeat)
         feat = np.array(feat)
@@ -306,25 +305,27 @@ class SampleDataset:
             feat = feat[..., self.feature_size:]
         return feat      
 
-    def random_avg(self, x, segm=None):
-        if len(x) < self.num_segments:
+    def random_avg(self, x, segm=None, sample_num = None):
+        sample_points = sample_num if sample_num is not None else self.num_segments
+        if len(x) < sample_points:
             ind = self.random_perturb(len(x))
             x_n = x[ind]
             segm = segm[ind] if segm is not None else None
             return x_n, segm
         else:
-            inds = np.array_split(np.arange(len(x)), self.num_segments)
-            x_n = np.zeros((self.num_segments, x.shape[-1])).astype(x.dtype)
+            inds = np.array_split(np.arange(len(x)), sample_points)
+            x_n = np.zeros((sample_points, x.shape[-1])).astype(x.dtype)
             segm_n = np.zeros(
-                (self.num_segments, segm.shape[-1])).astype(x.dtype)
+                (sample_points, segm.shape[-1])).astype(x.dtype)
             for i, ind in enumerate(inds):
                 x_n[i] = np.mean(x[ind], axis=0)
                 if segm is not None:
                     segm_n[i] = segm[(ind[0] + ind[-1]) // 2]
             return x_n, segm_n if segm is not None else None
 
-    def random_pad(self, x, segm=None):
-        length = self.num_segments
+    def random_pad(self, x, segm=None, sample_num = None):
+        sample_points = sample_num if sample_num is not None else self.num_segments
+        length = sample_points
         if x.shape[0] > length:
             strt = np.random.randint(0, x.shape[0] - length)
             x_ret = x[strt:strt + length]
@@ -340,12 +341,13 @@ class SampleDataset:
                 segm = np.pad(segm, ((0, pad_len), (0, 0)), mode='constant')
             return x_ret, segm
 
-    def random_perturb(self, length):
-        if self.num_segments == length:
-            return np.arange(self.num_segments).astype(int)
-        samples = np.arange(self.num_segments) * length / self.num_segments
-        for i in range(self.num_segments):
-            if i < self.num_segments - 1:
+    def random_perturb(self, length, sample_num = None):
+        sample_points = sample_num if sample_num is not None else self.num_segments
+        if sample_points == length:
+            return np.arange(sample_points).astype(int)
+        samples = np.arange(sample_points) * length / sample_points
+        for i in range(sample_points):
+            if i < sample_points - 1:
                 if int(samples[i]) != int(samples[i + 1]):
                     samples[i] = np.random.choice(
                         range(int(samples[i]),
@@ -360,10 +362,11 @@ class SampleDataset:
                     samples[i] = int(samples[i])
         return samples.astype(int)
 
-    def uniform_sampling(self, length):
-        if self.num_segments == length:
-            return np.arange(self.num_segments).astype(int)
-        samples = np.arange(self.num_segments) * length / self.num_segments
+    def uniform_sampling(self, length, sample_num = None):
+        sample_points = sample_num if sample_num is not None else self.num_segments
+        if sample_points == length:
+            return np.arange(sample_points).astype(int)
+        samples = np.arange(sample_points) * length / sample_points
         samples = np.floor(samples)
         return samples.astype(int)
 

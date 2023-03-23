@@ -102,7 +102,14 @@ class DELU(torch.nn.Module):
         else:
             _min = 0
         return atn * (x - _min) + _min
-
+    
+    def temporal_interpolate(self, input_, target_size_):
+        # input: torch.Size([13, 250, 21])-->torch.Size([13, 21, 250])-->torch.Size([13, 21, 500])
+        # output: torch.Size([13, 500, 21])
+        input_ = torch.transpose(input_,1,2)
+        input_ = torch.nn.functional.interpolate(input_, size=target_size_, mode="nearest")
+        return torch.transpose(input_,1,2)     
+       
     def criterion(self, outputs, labels, **args):
         if args['opt'].use_multi_speed_feature:
             assert type(outputs) == list
@@ -112,10 +119,15 @@ class DELU(torch.nn.Module):
             fast_feat, fast_element_logits, fast_element_atn = \
                 fast_outputs['feat'], fast_outputs['cas'], fast_outputs['attn']                
             feat, element_logits, element_atn = outputs['feat'], outputs['cas'], outputs['attn']
+            # interpolate different features in temporal  dimension
+            t_dim = element_logits.shape[1]
+            fast_element_logits = self.temporal_interpolate(fast_element_logits, t_dim)
+            slow_element_logits = self.temporal_interpolate(slow_element_logits, t_dim)
+            fast_element_atn = self.temporal_interpolate(fast_element_atn, t_dim)
+            slow_element_atn = self.temporal_interpolate(slow_element_atn, t_dim)            
             # print("element_logits:{}".format(element_logits.shape))
             # print("fast_element_logits:{}".format(fast_element_logits.shape))
-            # print("slow_element_logits:{}".format(slow_element_logits.shape))
-            # exit()
+            # print("slow_element_logits:{}".format(slow_element_logits.shape))              
             element_logits = (element_logits + slow_element_logits + fast_element_logits)/3
             element_atn = (element_atn + slow_element_atn + fast_element_atn)/3
         else:
