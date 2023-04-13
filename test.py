@@ -19,7 +19,13 @@ from eval.eval_detection import ANETdetection
 
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-
+def temporal_interpolate(input_, target_size_):
+    # input: torch.Size([13, 250, 21])-->torch.Size([13, 21, 250])-->torch.Size([13, 21, 500])
+    # output: torch.Size([13, 500, 21])
+    input_ = torch.transpose(input_,1,2)
+    input_ = torch.nn.functional.interpolate(input_, size=target_size_, mode="linear")
+    return torch.transpose(input_,1,2)    
+    
 @torch.no_grad()
 def test(itr, dataset, args, model, device):
     model.eval()
@@ -29,31 +35,71 @@ def test(itr, dataset, args, model, device):
 
     proposals = []
     results = defaultdict(dict)
+    results_np = defaultdict(dict)
     while not done:
         if dataset.currenttestidx % (len(dataset.testidx) // 5) == 0:
             print('Testing test data point %d of %d' % (dataset.currenttestidx, len(dataset.testidx)))
-
-        features, labels, vn, done = dataset.load_data(is_training=False)
-
-        seq_len = [features.shape[0]]
+        if args.use_multi_speed_feature_in_test:
+            features, labels, vn, done  = dataset.load_aug_data(args, speed=[0.5, 1, 2], is_training=False)
+            features_slow, features, features_fast = features             
+            features_slow = torch.from_numpy(features_slow).float().to(device).unsqueeze(0)
+            features = torch.from_numpy(features).float().to(device).unsqueeze(0)
+            features_fast = torch.from_numpy(features_fast).float().to(device).unsqueeze(0)
+            seq_len = min(features_slow.shape[0], features.shape[0], features_fast.shape[0])
+        else:
+            features, labels, vn, done = dataset.load_data(is_training=False)
+            seq_len = [features.shape[0]]
+            features = torch.from_numpy(features).float().to(device).unsqueeze(0)
         if seq_len == 0:
             continue
-        features = torch.from_numpy(features).float().to(device).unsqueeze(0)
         with torch.no_grad():
-            outputs = model(Variable(features), is_training=False, seq_len=seq_len, opt=args)
+            if args.use_multi_speed_feature_in_test:
+                outputs = model(Variable(features), is_training=False, seq_len=seq_len, opt=args)
+                slow_outputs = model(Variable(features_slow), is_training=False, seq_len=seq_len, opt=args)
+                fast_outputs = model(Variable(features_fast), is_training=False, seq_len=seq_len, opt=args)             
+                
+                slow_element_logits, slow_element_atn = slow_outputs['cas'], slow_outputs['attn']
+                element_logits, element_atn = outputs['cas'], outputs['attn']
+                fast_element_logits, fast_element_atn = fast_outputs['cas'], fast_outputs['attn']
+                # interpolate different features in temporal  dimension
+                t_dim = element_logits.shape[1]
+                fast_element_logits = temporal_interpolate(fast_element_logits, t_dim)
+                slow_element_logits = temporal_interpolate(slow_element_logits, t_dim)
+                fast_element_atn = temporal_interpolate(fast_element_atn, t_dim)
+                slow_element_atn = temporal_interpolate(slow_element_atn, t_dim)            
+                # print("element_logits:{}".format(element_logits.shape))
+                # print("fast_element_logits:{}".format(fast_element_logits.shape))
+                # print("slow_element_logits:{}".format(slow_element_logits.shape))              
+                element_logits = (element_logits + slow_element_logits + fast_element_logits)/3
+                element_atn = (element_atn + slow_element_atn + fast_element_atn)/3                
+                # outputs['cas'] = element_logits
+                # outputs['attn'] = element_atn
+            else:
+                outputs = model(Variable(features), is_training=False, seq_len=seq_len, opt=args)
             element_logits = outputs['cas']
-            results[vn] = {'cas': outputs['cas'], 'attn': outputs['attn']}
-            proposals.append(getattr(PM, args.proposal_method)(vn, outputs))
+            results[vn] = {'cas': outputs['cas'], 'attn': outputs['attn']}           
+            _proposals = getattr(PM, args.proposal_method)(vn, outputs)
+            proposals.append(_proposals)
             logits = element_logits.squeeze(0)
-        tmp = F.softmax(torch.mean(torch.topk(logits, k=int(np.ceil(len(features) / 8)), dim=0)[0], dim=0),
-                        dim=0).cpu().data.numpy()
+        
+        tmp = F.softmax(torch.mean(torch.topk(logits, \
+            k=int(np.ceil(len(features) / 8)), dim=0)[0], \
+                dim=0), dim=0).cpu().data.numpy()
 
         instance_logits_stack.append(tmp)
         labels_stack.append(labels)
-
+        
+        results_np[vn]['cas'] = np.array(outputs['cas'].cpu().data.numpy())
+        results_np[vn]['attn'] = np.array(outputs['attn'].cpu().data.numpy())        
+        results_np[vn]['softmax_cas'] = np.array(tmp)
+        results_np[vn]['labels'] = np.array(labels)
+        results_np[vn]['proposals'] = _proposals
+        
     if not os.path.exists('temp'):
         os.mkdir('temp')
-    np.save('temp/{}.npy'.format(args.model_name), results)
+    save_path = 'temp/{}_testout.npy'.format(args.model_name)
+    np.save(save_path, results_np)
+    print('model saved at:{}'.format(save_path))
 
     instance_logits_stack = np.array(instance_logits_stack)
     labels_stack = np.array(labels_stack)

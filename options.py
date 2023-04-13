@@ -19,8 +19,10 @@ parser.add_argument('--feature_size', default=2048,
                     help='size of feature (default: 2048)')
 parser.add_argument('--num_class', type=int, default=20,
                     help='number of classes (default: )')
-parser.add_argument('--use_multi_speed_feature', type=bool, default=True,
+parser.add_argument('--use_multi_speed_feature', type=bool, default=False,
                     help='use multi speed features')
+parser.add_argument('--use_multi_speed_feature_in_test', type=bool, default=False,
+                    help='use multi speed features in test')
 parser.add_argument('--dataset_name', default='Thumos14reduced',
                     help='dataset to train on (default: )')
 parser.add_argument('--max_seqlen', type=int, default=320,

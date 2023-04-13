@@ -13,9 +13,12 @@ python main.py \
 --interval 50 \
 --max_seqlen 320 \
 --lr 0.00005 \
---k 7 \
+--k 0 \
 --num_similar $num_similar \
 --batch_size $batch_size \
+--do_video_concat_aug True \
+--use_multi_speed_feature True \
+--use_multi_speed_feature_in_test True \
 --dataset_name Thumos14reduced \
 --path_dataset /dev/THUMOS14/Thumos14reduced \
 --save_model_path $current_path \
@@ -25,4 +28,5 @@ python main.py \
 --max_iter 5000 \
 --dataset SampleDataset \
 --weight_decay 0.001 \
---AWM BWA_fusion_dropout_feat_v2
+--AWM BWA_fusion_dropout_feat_v2 \
+--without_wandb

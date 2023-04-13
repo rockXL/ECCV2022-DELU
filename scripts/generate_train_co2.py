@@ -36,28 +36,36 @@ def run_test_cmd(cmd):
     if run_status_ == 0:
         # success
         parse_ = output_.split('\n')
-        model1 = parse_[0]
-        map1 = parse_[12].split('||')[4].split('=')[-1].strip()
-        model2 = parse_[15]
-        map2 = parse_[-3].split('||')[4].split('=')[-1].strip()
-        return [model1, float(map1), parse_[12:15]] if float(map1) > float(map2) else [model2, float(map2), parse_[-3:]]
+        models = [i for i in parse_ if 'testing model' in i]
+        model1, model2 = models
+        maps = [i for i in parse_ if "map @ 0.1 = " in i]
+        maps_avg = [i for i in parse_ if "mAP Avg 0.1" in i]
+        v1, v2 = maps
+        v1_avg, v2_avg = maps_avg
+        v1_half = v1[v1.index('map @ 0.5 = ')+12:].split(' ')[0]
+        v2_half = v2[v2.index('map @ 0.5 = ')+12:].split(' ')[0]
+        return [model1, float(v1_half), v1, v1_avg] if float(v1_half) > float(v2_half) else [model2, float(v2_half), v2, v2_avg]
     else:
         return -1
     # return os.system(cmd)
 
 
 if __name__ == '__main__':
-    cores = 16
+    cores = 8
     # train
     results = Parallel(n_jobs=cores)(delayed(run_train_cmd)(cmd) for cmd in train_cmds)
     print(results)
 
     # test
     results = Parallel(n_jobs=cores)(delayed(run_test_cmd)(cmd) for cmd in test_cmds)
+    total_task = len(results)
     results = [i for i in results if i != -1]
+    success_task = len(results)
     s_results = sorted(results, key=lambda x: x[1], reverse=True)
     for i in s_results[:3]:
         print(i)
     with open('co2_out.txt', 'w') as fout:
         for i in s_results:
             fout.write('{}\n'.format(i))
+    print('total_task:{}'.format(total_task))
+    print('success_task:{}'.format(success_task))

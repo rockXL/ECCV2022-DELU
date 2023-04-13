@@ -107,7 +107,7 @@ class DELU(torch.nn.Module):
         # input: torch.Size([13, 250, 21])-->torch.Size([13, 21, 250])-->torch.Size([13, 21, 500])
         # output: torch.Size([13, 500, 21])
         input_ = torch.transpose(input_,1,2)
-        input_ = torch.nn.functional.interpolate(input_, size=target_size_, mode="nearest")
+        input_ = torch.nn.functional.interpolate(input_, size=target_size_, mode="linear")
         return torch.transpose(input_,1,2)     
        
     def criterion(self, outputs, labels, **args):
@@ -162,29 +162,31 @@ class DELU(torch.nn.Module):
         loss_mil_orig, _ = self.topkloss(element_logits,
                                          labels,
                                          is_back=True,
-                                         rat=args['opt'].k)
+                                         rat=args['opt'].k, 
+                                         epoch=args['itr'])
 
         # SAL
         loss_mil_supp, _ = self.topkloss(element_logits_supp,
                                          labels,
                                          is_back=False,
-                                         rat=args['opt'].k)
+                                         rat=args['opt'].k, 
+                                         epoch=args['itr'])
 
         loss_3_supp_Contrastive = self.Contrastive(feat, element_logits_supp, labels, is_back=False)
-
+        # norm loss
         loss_norm = element_atn.mean()
-        # guide loss
-        loss_guide = (1 - element_atn -
+        # guide loss| opposite loss
+        loss_guide_opposite = (1 - element_atn -
                       element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         v_loss_norm = v_atn.mean()
-        # guide loss
-        v_loss_guide = (1 - v_atn -
+        # guide loss| opposite loss
+        v_loss_guide_opposite = (1 - v_atn -
                         element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         f_loss_norm = f_atn.mean()
-        # guide loss
-        f_loss_guide = (1 - f_atn -
+        # guide loss| opposite loss
+        f_loss_guide_opposite = (1 - f_atn -
                         element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         total_loss = (
@@ -194,7 +196,7 @@ class DELU(torch.nn.Module):
             args['opt'].alpha3 * loss_3_supp_Contrastive +
             args['opt'].alpha4 * mutual_loss +
             args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3 +
-            args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3)
+            args['opt'].alpha2 * (loss_guide_opposite + v_loss_guide_opposite + f_loss_guide_opposite) / 3)
 
         loss_dict = {
             'edl_loss': args['opt'].alpha_edl * edl_loss,
@@ -204,7 +206,7 @@ class DELU(torch.nn.Module):
             'loss_supp_contrastive': args['opt'].alpha3 * loss_3_supp_Contrastive,
             'mutual_loss': args['opt'].alpha4 * mutual_loss,
             'norm_loss': args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3,
-            'guide_loss': args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3,
+            'guide_loss': args['opt'].alpha2 * (loss_guide_opposite + v_loss_guide_opposite + f_loss_guide_opposite) / 3,
             'total_loss': total_loss,
         }
 
@@ -229,13 +231,13 @@ class DELU(torch.nn.Module):
         total_snippet_num = element_logits.shape[1]
         curve = self.course_function(epoch, total_epoch, total_snippet_num, amplitude)
 
-        loss_guide = (1 - element_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
+        loss_guide_opposite = (1 - element_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
 
-        v_loss_guide = (1 - v_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
+        v_loss_guide_opposite = (1 - v_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
 
-        f_loss_guide = (1 - f_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
+        f_loss_guide_opposite = (1 - f_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
 
-        total_loss_guide = (loss_guide + v_loss_guide + f_loss_guide) / 3
+        total_loss_guide = (loss_guide_opposite + v_loss_guide_opposite + f_loss_guide_opposite) / 3
 
         _, uct_indices = torch.sort(snippet_uct, dim=1)
         sorted_curve = torch.gather(curve.repeat(self.batchsize, 1), 1, uct_indices)
@@ -298,7 +300,8 @@ class DELU(torch.nn.Module):
                  element_logits,
                  labels,
                  is_back=True,
-                 rat=8):
+                 rat = 8,
+                 epoch = 5000):
 
         if is_back:
             labels_with_back = torch.cat(
@@ -306,12 +309,23 @@ class DELU(torch.nn.Module):
         else:
             labels_with_back = torch.cat(
                 (labels, torch.zeros_like(labels[:, [0]])), dim=-1)
-
+        # dynamic top K loss, k is bigger, the boundary is more precise
+        # while k is smaller, the boundary is more ambiguous
+        if rat == 0:
+            rat = 7 + int(epoch / 500)
+        else:
+            rat = rat
+        # rat = 7 + int(epoch / 1500) - 3
         topk_val, topk_ind = torch.topk(
             element_logits,
             k=max(1, int(element_logits.shape[-2] // rat)),
             dim=-2)
-
+        # print('rat:{}'.format(rat))
+        # print('element_logits.shape:{}'.format(element_logits.shape))
+        # print('topk_val.shape:{}'.format(topk_val.shape))
+        # rat:7
+        # element_logits.shape:torch.Size([13, 500, 21])
+        # topk_val.shape:torch.Size([13, 71, 21])
         instance_logits = torch.mean(topk_val, dim=-2)
 
         labels_with_back = labels_with_back / (
@@ -462,17 +476,17 @@ class DELU_ACT(torch.nn.Module):
 
         loss_norm = element_atn.mean()
         # guide loss
-        loss_guide = (1 - element_atn -
+        loss_guide_opposite = (1 - element_atn -
                       element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         v_loss_norm = v_atn.mean()
         # guide loss
-        v_loss_guide = (1 - v_atn -
+        v_loss_guide_opposite = (1 - v_atn -
                         element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         f_loss_norm = f_atn.mean()
         # guide loss
-        f_loss_guide = (1 - f_atn -
+        f_loss_guide_opposite = (1 - f_atn -
                         element_logits.softmax(-1)[..., [-1]]).abs().mean()
 
         # total loss
@@ -483,7 +497,7 @@ class DELU_ACT(torch.nn.Module):
             args['opt'].alpha3 * loss_3_supp_Contrastive +
             args['opt'].alpha4 * mutual_loss +
             args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3 +
-            args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3)
+            args['opt'].alpha2 * (loss_guide_opposite + v_loss_guide_opposite + f_loss_guide_opposite) / 3)
 
         loss_dict = {
             'edl_loss': args['opt'].alpha_edl * edl_loss,
@@ -493,7 +507,7 @@ class DELU_ACT(torch.nn.Module):
             'loss_supp_contrastive': args['opt'].alpha3 * loss_3_supp_Contrastive,
             'mutual_loss': args['opt'].alpha4 * mutual_loss,
             'norm_loss': args['opt'].alpha1 * (loss_norm + v_loss_norm + f_loss_norm) / 3,
-            'guide_loss': args['opt'].alpha2 * (loss_guide + v_loss_guide + f_loss_guide) / 3,
+            'guide_loss': args['opt'].alpha2 * (loss_guide_opposite + v_loss_guide_opposite + f_loss_guide_opposite) / 3,
             'total_loss': total_loss,
         }
 
@@ -518,13 +532,13 @@ class DELU_ACT(torch.nn.Module):
         total_snippet_num = element_logits.shape[1]
         curve = self.course_function(epoch, total_epoch, total_snippet_num, amplitude)
 
-        loss_guide = (1 - element_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
+        loss_guide_opposite = (1 - element_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
 
-        v_loss_guide = (1 - v_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
+        v_loss_guide_opposite = (1 - v_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
 
-        f_loss_guide = (1 - f_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
+        f_loss_guide_opposite = (1 - f_atn - element_logits.softmax(-1)[..., [-1]]).abs().squeeze()
 
-        total_loss_guide = (loss_guide + v_loss_guide + f_loss_guide) / 3
+        total_loss_guide = (loss_guide_opposite + v_loss_guide_opposite + f_loss_guide_opposite) / 3
 
         _, uct_indices = torch.sort(snippet_uct, dim=1)
         sorted_curve = torch.gather(curve.repeat(self.batchsize, 1), 1, uct_indices)

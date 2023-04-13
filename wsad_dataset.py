@@ -253,12 +253,12 @@ class SampleDataset:
             labels = np.array([self.temp_labels_multihot[i] for i in idx])
             if type(speed) == list:
                 speed_slow, speed1, speed_fast = speed
-                feat_slow = self.sample_feature_with_speed(idx, speed_slow)
-                feat = self.sample_feature_with_speed(idx, speed1)
-                feat_fast = self.sample_feature_with_speed(idx, speed_fast)
+                feat_slow = self.sample_temp_feature_with_speed(idx, speed_slow)
+                feat = self.sample_temp_feature_with_speed(idx, speed1)
+                feat_fast = self.sample_temp_feature_with_speed(idx, speed_fast)
                 feat = [feat_slow, feat, feat_fast]
             else:
-                feat = self.sample_feature_with_speed(idx, speed)
+                feat = self.sample_temp_feature_with_speed(idx, speed)
 
             return feat, labels, rand_sampleid
             # return feat, labels, rand_sampleid, idx
@@ -279,9 +279,19 @@ class SampleDataset:
                 feat = feat[..., : self.feature_size]
             elif self.mode == "flow":
                 feat = feat[..., self.feature_size:]
-            return feat, np.array(labs), vn, done
+            if type(speed) == list:
+                speed_slow, speed1, speed_fast = speed
+                feat = feat
+                slow_sample_idx = self.uniform_sampling(feat.shape[0], sample_num = int(feat.shape[0]/speed_slow))
+                feat_slow = feat[slow_sample_idx]
+                fast_sample_idx = self.uniform_sampling(feat.shape[0], sample_num = int(feat.shape[0]/speed_fast))
+                feat_fast = feat[fast_sample_idx]
+                feat = [feat_slow, feat, feat_fast]                
+                return feat, np.array(labs), vn, done
+            else:                
+                return feat, np.array(labs), vn, done
 
-    def sample_feature_with_speed(self, idx, speed):
+    def sample_temp_feature_with_speed(self, idx, speed):
         feat = []
         for i in idx:
             ifeat = self.temp_features[i]

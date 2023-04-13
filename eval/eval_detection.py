@@ -262,6 +262,16 @@ class ANETdetection(object):
             print("Warning: No predictions of label '%s' were provdied." % label_name)
             return pd.DataFrame()
 
+    def _get_gts_with_label(self, gt_by_label, label_name, cidx):
+        """Get all predicitons of the given label. Return empty DataFrame if there
+        is no predcitions with the given label.
+        """
+        try:
+            return gt_by_label.get_group(cidx).reset_index(drop=True)
+        except:
+            print("Warning: No groundtruths of label '%s' were provdied." % label_name)
+            return pd.DataFrame()
+        
     def wrapper_compute_average_precision(self):
         """Computes average precision for each class in the subset.
         """
@@ -289,6 +299,74 @@ class ANETdetection(object):
 
         return ap
 
+    def wrapper_compute_average_precision_single_video(self, ground_truth, prediction):
+        """Computes average precision for each class in the subset.
+        """
+        ap = np.zeros((len(self.tiou_thresholds), len(self.activity_index)))
+        # Adaptation to query faster
+        ground_truth_by_label = ground_truth.groupby("label")
+        prediction_by_label = prediction.groupby("label")
+        label_g = ground_truth['label'].to_list()[:]
+        label_p = prediction['label'].to_list()[:]
+        exist_label = list(set(label_g+label_p))
+        exist_label = list(map(int,exist_label))
+        results = []
+        for label_name, cidx in self.activity_index.items():
+            if cidx in exist_label:            
+                try:
+                    r_ = compute_average_precision_detection(
+                        ground_truth=self._get_gts_with_label(
+                            ground_truth_by_label, label_name, cidx
+                        ),
+                        prediction=self._get_predictions_with_label(
+                            prediction_by_label, label_name, cidx
+                        ),
+                        tiou_thresholds=self.tiou_thresholds,
+                        is_single_video=True)
+                    
+                    results.append(r_)
+                except:
+                    print('cidx:{}'.format(cidx))
+                    print('exist_label:{}'.format(exist_label))
+                    # print('results:{}'.format(results))
+                    print('self.activity_index:{}'.format(self.activity_index))                
+                    print('ground_truth:{}'.format(ground_truth))                
+                    print('ground_truth_by_label:{}'.format(ground_truth_by_label))             
+        iidx = 0
+        for i, cidx in enumerate(self.activity_index.values()):
+            if cidx in exist_label:
+                ap[:, cidx] = results[iidx]
+                iidx += 1
+        return ap[:, exist_label]
+    
+    def evaluate_single_video(self, video_name):
+        """Evaluates a prediction file. For the detection task we measure the
+        interpolated mean average precision to measure the performance of a
+        method.
+        """
+        if self.verbose:
+            # print("[INIT] Loaded annotations from {} subset.".format(self.subset))
+            ground_truth = self.ground_truth[self.ground_truth['video-id'] == video_name]
+            prediction = self.prediction[self.prediction['video-id'] == video_name]
+            nr_gt = len(ground_truth)
+            print("\tvideo name: {}".format(video_name))
+            print("\tNumber of ground truth instances: {}".format(nr_gt))
+            nr_pred = len(prediction)
+            print("\tNumber of predictions: {}".format(nr_pred))
+            # print("\tFixed threshold for tiou score: {}".format(self.tiou_thresholds))
+
+        self.ap = self.wrapper_compute_average_precision_single_video(ground_truth, prediction)
+        # print(self.ap)
+        self.mAP = self.ap.mean(axis=1)
+        self.average_mAP = self.mAP.mean()
+
+        # if self.verbose:
+            # print ('[RESULTS] Performance on ActivityNet detection task.')
+            # for k in range(len(self.tiou_thresholds)):
+            #     print("Detection map @ %f = %f" % (self.tiou_thresholds[k], self.mAP[k]))
+            # print("Average-mAP: {}\n".format(self.mAP))
+        return self.mAP
+    
     def evaluate(self):
         """Evaluates a prediction file. For the detection task we measure the
         interpolated mean average precision to measure the performance of a
@@ -327,8 +405,8 @@ class ANETdetection(object):
 
 
 def compute_average_precision_detection(
-    ground_truth, prediction, tiou_thresholds=np.linspace(0.5, 0.95, 10)
-    ):
+    ground_truth, prediction, tiou_thresholds=np.linspace(0.5, 0.95, 10),
+    is_single_video=False):
     """Compute average precision (detection task) between ground truth and
     predictions data frames. If multiple predictions occurs for the same
     predicted segment, only the one with highest score is matches as
@@ -353,7 +431,8 @@ def compute_average_precision_detection(
     ap = np.zeros(len(tiou_thresholds))
     if prediction.empty:
         return ap
-
+    if is_single_video and ground_truth.empty:
+        return ap
     npos = float(len(ground_truth))
     lock_gt = np.ones((len(tiou_thresholds), len(ground_truth))) * -1
     # Sort predictions by decreasing score order.
