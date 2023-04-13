@@ -16,7 +16,7 @@ import options
 import wsad_dataset
 from test import test
 from train import train
-
+from torch.utils.tensorboard import SummaryWriter
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
             config=args,
             project=f"DELU_{args.dataset}",
             sync_tensorboard=True)
-
+    
     seed = args.seed
     print('=============seed: {}, pid: {}============='.format(seed, os.getpid()))
     setup_seed(seed)
@@ -57,6 +57,7 @@ if __name__ == '__main__':
     os.makedirs(log_model_path, exist_ok=True)
     os.makedirs(ckpt_path, exist_ok=True)
     print(args)
+    logger = SummaryWriter(log_dir=ckpt_path)
     model = getattr(model, args.use_model)(dataset.feature_size, dataset.num_class, opt=args).to(device)
 
     if args.pretrained_ckpt is not None:
@@ -68,7 +69,7 @@ if __name__ == '__main__':
     lrs = [args.lr, args.lr / 5, args.lr / 5 / 5]
     print(model)
     for itr in tqdm(range(args.max_iter)):
-        loss = train(itr, dataset, args, model, optimizer, device)
+        loss = train(itr, logger, dataset, args, model, optimizer, device)
         total_loss += loss
         if itr % args.interval == 0 and not itr == 0:
             print('Iteration: %d, Loss: %.5f' % (itr, total_loss / args.interval))

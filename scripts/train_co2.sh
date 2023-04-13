@@ -24,4 +24,5 @@ python main.py \
 --max_iter 5000 \
 --dataset SampleDataset \
 --weight_decay 0.001 \
---AWM BWA_fusion_dropout_feat_v2
+--AWM BWA_fusion_dropout_feat_v2 \
+--without_wandb

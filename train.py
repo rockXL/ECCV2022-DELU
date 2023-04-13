@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import wandb
+from torch.utils.tensorboard import SummaryWriter
 
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
@@ -12,7 +13,7 @@ def model_forward(model, features, device, itr, args, requires_grad):
         features = features.detach()
     return seq_len, model(features, seq_len=seq_len, is_training=True, itr=itr, opt=args)
 
-def train(itr, dataset, args, model, optimizer, device):
+def train(itr, logger, dataset, args, model, optimizer, device):
     model.train()
     # features, labels, pairs_id = dataset.load_data(n_similar=args.num_similar)
     if args.use_multi_speed_feature:
@@ -39,5 +40,6 @@ def train(itr, dataset, args, model, optimizer, device):
     if not args.without_wandb:
         if itr % 20 == 0 and itr != 0:
             wandb.log(loss_dict)
-
+    for key,values in  loss_dict.items():        
+        logger.add_scalar(str(key), values, itr + 1)
     return total_loss.data.cpu().numpy()
